@@ -1,5 +1,5 @@
 {
-  "name": "Copy of DocFlow MVP",
+  "name": "DocFlow",
   "description": "A production-grade document digitization SaaS for structured data extraction using Gemini, featuring automated workflows, validation, and multi-format exports.",
   "requestFramePermissions": [
     "camera"

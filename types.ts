@@ -4,6 +4,7 @@ export enum DocStatus {
   EXTRACTING = 'EXTRACTING',
   NEEDS_REVIEW = 'NEEDS_REVIEW',
   APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
   EXPORTING = 'EXPORTING',
   EXPORTED = 'EXPORTED',
   FAILED = 'FAILED'
@@ -20,11 +21,15 @@ export enum DocType {
   UNKNOWN = 'unknown'
 }
 
+export type IngestionSource = 'MANUAL' | 'EMAIL' | 'API';
+
 export interface User {
   id: string;
   email: string;
-  password?: string; // In a real app, this would be hashed on a server
+  password?: string;
   name: string;
+  inboundAddress?: string;
+  orgHandle?: string; // e.g. "acme.ap"
 }
 
 export interface Evidence {
@@ -96,6 +101,7 @@ export interface DocumentRecord {
   id: string;
   userId: string;
   filename: string;
+  source: IngestionSource;
   status: DocStatus;
   type: DocType;
   createdAt: number;
@@ -104,6 +110,7 @@ export interface DocumentRecord {
   extraction?: ExtractionResult;
   validation?: ValidationResult;
   auditTrail: AuditEntry[];
+  rejectionReason?: string;
   lastError?: {
     code: string;
     message: string;

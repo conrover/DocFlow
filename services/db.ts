@@ -19,14 +19,33 @@ export const db = {
     if (users.find(u => u.email === user.email)) {
       throw new Error("User already exists");
     }
+    // Generate a default unique inbound address
+    const uniqueHash = Math.random().toString(36).substring(2, 6);
+    user.inboundAddress = `inbox_${uniqueHash}@inbound.docflow.io`;
+    
     users.push(user);
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   },
 
-  login: (email: string, password?: string): User | null => {
+  updateUser: (updatedUser: User) => {
+    const users = db.getUsers();
+    const idx = users.findIndex(u => u.id === updatedUser.id);
+    if (idx > -1) {
+      users[idx] = updatedUser;
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      
+      // Update session/local storage for current user
+      const isPersistent = !!localStorage.getItem(CURRENT_USER_KEY);
+      const storage = isPersistent ? localStorage : sessionStorage;
+      storage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedUser));
+    }
+  },
+
+  login: (email: string, password?: string, rememberMe: boolean = false): User | null => {
     const user = db.getUsers().find(u => u.email === email && u.password === password);
     if (user) {
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
       return user;
     }
     return null;
@@ -34,10 +53,13 @@ export const db = {
 
   logout: () => {
     localStorage.removeItem(CURRENT_USER_KEY);
+    sessionStorage.removeItem(CURRENT_USER_KEY);
   },
 
   getCurrentUser: (): User | null => {
-    const data = localStorage.getItem(CURRENT_USER_KEY);
+    const localData = localStorage.getItem(CURRENT_USER_KEY);
+    const sessionData = sessionStorage.getItem(CURRENT_USER_KEY);
+    const data = localData || sessionData;
     return data ? JSON.parse(data) : null;
   },
 

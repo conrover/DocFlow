@@ -4,19 +4,32 @@ import { EXTRACTION_SCHEMA } from "../constants";
 import { ExtractionResult, DocType } from "../types";
 
 export class GeminiService {
-  // Guidelines: Do not persist 'ai' instance to avoid stale API keys.
-  // Instead, create it right before use.
-
+  /**
+   * Performs deterministic financial data extraction using Gemini Flash.
+   * Emphasizes strict accuracy for tax, subtotal, and vendor identification.
+   */
   async extractFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
-    // Correct initialization: always use named parameter { apiKey: ... }
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    const prompt = `Act as a senior forensic accountant and data entry architect. 
+    Analyze the provided document with 100% precision.
+    
+    EXTRACTION RULES:
+    1. STRICT DATA TYPING: Numbers must be floats, Dates must be ISO-8601 or YYYY-MM-DD.
+    2. FINANCIAL RECONCILIATION: Ensure (specialized.invoice.subtotal + specialized.invoice.tax + specialized.invoice.shipping) == specialized.invoice.total. If there is a variance, note it in 'warnings'.
+    3. CONFIDENCE SCORES: Provide an honest float [0.0 - 1.0] for every field and table.
+    4. VENDOR IDENTIFICATION: Look for headers, logos, and 'From' sections.
+    5. ZERO HALLUCINATION: If a field is not physically present, return null.
+    6. COORDINATE REASONING: Associate extracted text with the specific page it was found on.
+    
+    Return the result in strict JSON format matching the schema.`;
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
           parts: [
-            { text: "Act as an expert data entry specialist. Analyze this document and extract all relevant information in a strict JSON format based on the provided schema. Do not hallucinate. If a value is unknown, use null. Set doc_type correctly. If doc_type is invoice, fill specialized.invoice and set specialized.purchase_order to null." },
+            { text: prompt },
             {
               inlineData: {
                 data: base64Data,
@@ -29,21 +42,22 @@ export class GeminiService {
       config: {
         responseMimeType: "application/json",
         responseSchema: EXTRACTION_SCHEMA as any,
-        temperature: 0.1,
+        temperature: 0.1, // Near-deterministic for data extraction
       }
     });
 
     try {
-      // Access .text property directly as defined in the response object
-      const result = JSON.parse(response.text || '{}');
+      const text = response.text;
+      if (!text) throw new Error("Empty response from AI engine.");
+      
+      const result = JSON.parse(text);
       return result as ExtractionResult;
     } catch (error) {
-      console.error("Failed to parse Gemini response:", error);
-      throw new Error("Invalid extraction format received from AI.");
+      console.error("Gemini Extraction Failure:", error);
+      throw new Error("The AI failed to parse the document structure reliably. Please try a higher-resolution scan.");
     }
   }
 
-  // Simplified PDF processing: Extracting first page for MVP demo
   async extractFromDocument(file: File): Promise<ExtractionResult> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

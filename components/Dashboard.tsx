@@ -1,5 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { db } from '../services/db';
+import { workflowService } from '../services/workflow';
 import { DocumentRecord, DocStatus } from '../types';
 
 interface DashboardProps {
@@ -9,6 +11,31 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ docs, onViewDocs, onSelectDoc }) => {
+  const [isSimulating, setIsSimulating] = useState(false);
+  const user = db.getCurrentUser();
+
+  const resolvedHandle = user?.orgHandle 
+    ? `${user.orgHandle}@inbound.docflow.io` 
+    : (user?.inboundAddress || 'inbound channel');
+
+  const handleEmailSimulation = async () => {
+    setIsSimulating(true);
+    // Create a mock File object to represent an attachment
+    const mockFileContent = "Mock Invoice PDF content";
+    const file = new File([mockFileContent], `inv_mail_${Math.floor(Math.random()*1000)}.pdf`, { type: 'application/pdf' });
+    
+    try {
+      await workflowService.processInboundDocument(file, 'EMAIL', () => {
+        // Parent App component refreshDocs handles the update via state change
+      });
+      alert(`Simulation successful! Document ingested via branded gateway: ${resolvedHandle}`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
   const duplicateDollars = docs
     .filter(d => d.validation?.isDuplicate)
     .reduce((sum, d) => sum + (d.extraction?.specialized.invoice?.total || 0), 0);
@@ -27,96 +54,129 @@ const Dashboard: React.FC<DashboardProps> = ({ docs, onViewDocs, onSelectDoc }) 
   const recentDocs = [...docs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 font-sans">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">AP Command Center</h2>
-          <p className="text-slate-500">Monitor extraction velocity and financial risk controls.</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">AP Command Center</h2>
+          <p className="text-slate-500 font-medium text-sm">Monitor extraction velocity and financial risk controls.</p>
         </div>
-        <button 
-          onClick={onViewDocs}
-          className="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 shadow-sm"
-        >
-          View Full Queue
-        </button>
+        <div className="flex space-x-3">
+          <button 
+            onClick={handleEmailSimulation}
+            disabled={isSimulating}
+            className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50"
+          >
+            {isSimulating ? 'Receiving Mail...' : 'Simulator: Inbound Email'}
+          </button>
+          <button 
+            onClick={onViewDocs}
+            className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 shadow-sm transition-all"
+          >
+            Full Queue
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {stats.map((stat) => (
-          <div key={stat.label} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className={`absolute top-0 left-0 w-1 h-full ${stat.color.replace('text', 'bg')}`}></div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
+          <div key={stat.label} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-xl hover:border-blue-200 transition-all">
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${stat.color.replace('text', 'bg')} opacity-40 group-hover:opacity-100 transition-opacity`}></div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
             <div className="flex flex-col mt-2">
-              <span className={`text-2xl font-black ${stat.color}`}>{stat.value}</span>
-              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter mt-1">{stat.sub}</span>
+              <span className={`text-2xl font-black ${stat.color} tracking-tighter`}>{stat.value}</span>
+              <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">{stat.sub}</span>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <h3 className="font-bold text-slate-800">Critical Batch Items</h3>
-          <span className="text-[10px] text-slate-400 font-bold uppercase">Real-time update</span>
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Critical Batch Items</h3>
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Real-time Stream</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
+            <thead className="bg-slate-50/50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
               <tr>
-                <th className="px-6 py-3">Vendor</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Risk Level</th>
-                <th className="px-6 py-3">Total</th>
-                <th className="px-6 py-3"></th>
+                <th className="px-8 py-4">Channel</th>
+                <th className="px-8 py-4">Vendor</th>
+                <th className="px-8 py-4">Status</th>
+                <th className="px-8 py-4">Risk Level</th>
+                <th className="px-8 py-4 text-right">Total</th>
+                <th className="px-8 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {recentDocs.length > 0 ? recentDocs.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onSelectDoc(doc.id)}>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-slate-800">
-                        {doc.extraction?.specialized.invoice?.supplier_name || 'Pending Extraction'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">#{doc.extraction?.specialized.invoice?.invoice_number || '---'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                      doc.status === DocStatus.EXPORTED ? 'bg-green-100 text-green-700' :
-                      doc.status === DocStatus.NEEDS_REVIEW ? 'bg-orange-100 text-orange-700' :
-                      doc.status === DocStatus.FAILED ? 'bg-red-100 text-red-700' :
-                      'bg-blue-100 text-blue-700'
+                <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer group" onClick={() => onSelectDoc(doc.id)}>
+                  <td className="px-8 py-5">
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
+                      doc.source === 'EMAIL' ? 'border-indigo-100 bg-indigo-50 text-indigo-600' : 'border-slate-100 bg-slate-50 text-slate-500'
                     }`}>
-                      {doc.status}
+                      {doc.source || 'MANUAL'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    {doc.validation?.isDuplicate ? (
-                      <span className="text-red-500 text-[10px] font-black uppercase tracking-tighter flex items-center">
-                        <span className="mr-1">🛑</span> Critical Duplicate
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-black text-slate-800 tracking-tight uppercase border-b border-transparent group-hover:border-slate-200">
+                        {doc.extraction?.specialized.invoice?.supplier_name || 'Processing...'}
                       </span>
-                    ) : doc.validation?.valid ? (
-                      <span className="text-green-500 text-[10px] font-bold uppercase tracking-tighter flex items-center">
-                        <span className="mr-1">✓</span> Low Risk
+                      <span className="text-[9px] text-slate-400 font-mono tracking-widest">#{doc.extraction?.specialized.invoice?.invoice_number || '---'}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5 relative">
+                    <div className="group/status relative inline-block">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                        doc.status === DocStatus.EXPORTED ? 'bg-green-100 text-green-700' :
+                        doc.status === DocStatus.REJECTED ? 'bg-red-50 text-red-600 border border-red-100' :
+                        doc.status === DocStatus.NEEDS_REVIEW ? 'bg-orange-100 text-orange-700' :
+                        doc.status === DocStatus.FAILED ? 'bg-red-100 text-red-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {doc.status}
+                      </span>
+                      {doc.status === DocStatus.REJECTED && doc.rejectionReason && (
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-2xl opacity-0 invisible group-hover/status:opacity-100 group-hover/status:visible transition-all z-50 pointer-events-none">
+                          <p className="font-black uppercase tracking-widest text-red-400 mb-1">Rejection Reason</p>
+                          <p className="font-medium leading-relaxed">{doc.rejectionReason}</p>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900"></div>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    {doc.validation?.isDuplicate ? (
+                      <span className="text-red-500 text-[9px] font-black uppercase tracking-widest flex items-center">
+                        <span className="mr-1 text-xs">🛑</span> Critical
+                      </span>
+                    ) : doc.validation?.valid && doc.status !== DocStatus.REJECTED ? (
+                      <span className="text-green-500 text-[9px] font-black uppercase tracking-widest flex items-center">
+                        <span className="mr-1 text-xs">✓</span> Verified
                       </span>
                     ) : (
-                      <span className="text-orange-500 text-[10px] font-bold uppercase tracking-tighter flex items-center">
-                        <span className="mr-1">⚠️</span> Needs Audit
+                      <span className="text-orange-500 text-[9px] font-black uppercase tracking-widest flex items-center">
+                        <span className="mr-1 text-xs">⚠️</span> Exception
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm font-black text-slate-700">
+                  <td className="px-8 py-5 text-sm font-black text-slate-800 text-right">
                     {doc.extraction?.specialized.invoice ? `${doc.extraction.specialized.invoice.currency} ${doc.extraction.specialized.invoice.total?.toLocaleString()}` : '---'}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-blue-600 font-bold hover:underline text-xs">REVIEW</button>
+                  <td className="px-8 py-5 text-right">
+                    <button className="text-blue-600 font-black tracking-widest text-[10px] uppercase opacity-0 group-hover:opacity-100 transition-all hover:underline">Review</button>
                   </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
-                    No documents in queue.
+                  <td colSpan={6} className="px-8 py-20 text-center text-slate-400">
+                    <div className="flex flex-col items-center">
+                      <span className="text-4xl mb-4 grayscale opacity-20">📥</span>
+                      <p className="text-[10px] font-black uppercase tracking-widest">Inbox Zero</p>
+                    </div>
                   </td>
                 </tr>
               )}
