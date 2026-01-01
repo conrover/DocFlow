@@ -21,6 +21,12 @@ export enum DocType {
   UNKNOWN = 'unknown'
 }
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  AUDITOR = 'AUDITOR',
+  VIEWER = 'VIEWER'
+}
+
 export type IngestionSource = 'MANUAL' | 'EMAIL' | 'API';
 
 export interface User {
@@ -28,8 +34,20 @@ export interface User {
   email: string;
   password?: string;
   name: string;
+  role: UserRole;
   inboundAddress?: string;
-  orgHandle?: string; // e.g. "acme.ap"
+  orgHandle?: string;
+  autoApproveEnabled?: boolean;
+  autoApproveThreshold?: number;
+}
+
+export interface APIToken {
+  id: string;
+  userId: string;
+  name: string;
+  token: string;
+  createdAt: number;
+  lastUsed?: number;
 }
 
 export interface Evidence {
@@ -44,12 +62,26 @@ export interface Field {
   evidence: Evidence;
 }
 
+export interface LineItem {
+  description: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  amount: number | null;
+  confidence: number;
+}
+
 export interface Table {
   name: string;
   confidence: number;
   columns: string[];
   rows: string[][];
   evidence: Evidence;
+}
+
+export interface MatchingState {
+  po_match: 'MATCHED' | 'VARIANCE' | 'NOT_FOUND';
+  receipt_match: 'MATCHED' | 'VARIANCE' | 'NOT_FOUND';
+  variances: string[];
 }
 
 export interface ExtractionResult {
@@ -70,6 +102,10 @@ export interface ExtractionResult {
       shipping: number | null;
       total: number | null;
       po_number: string | null;
+      line_items?: LineItem[];
+      gl_code_suggestion?: string | null;
+      payment_terms?: string | null;
+      has_discount_opportunity?: boolean;
     } | null;
     purchase_order: {
       buyer_name: string | null;
@@ -80,6 +116,7 @@ export interface ExtractionResult {
       total: number | null;
     } | null;
   };
+  matching?: MatchingState;
   warnings: string[];
 }
 

@@ -6,21 +6,22 @@ import { ExtractionResult, DocType } from "../types";
 export class GeminiService {
   /**
    * Performs deterministic financial data extraction using Gemini Flash.
-   * Emphasizes strict accuracy for tax, subtotal, and vendor identification.
+   * Emphasizes strategic AP intelligence like GL coding and discount discovery.
    */
   async extractFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Act as a senior forensic accountant and data entry architect. 
-    Analyze the provided document with 100% precision.
+    const prompt = `Act as a Strategic Controller and AP Automation Architect. 
+    Analyze the provided document with extreme precision.
     
-    EXTRACTION RULES:
-    1. STRICT DATA TYPING: Numbers must be floats, Dates must be ISO-8601 or YYYY-MM-DD.
-    2. FINANCIAL RECONCILIATION: Ensure (specialized.invoice.subtotal + specialized.invoice.tax + specialized.invoice.shipping) == specialized.invoice.total. If there is a variance, note it in 'warnings'.
-    3. CONFIDENCE SCORES: Provide an honest float [0.0 - 1.0] for every field and table.
-    4. VENDOR IDENTIFICATION: Look for headers, logos, and 'From' sections.
-    5. ZERO HALLUCINATION: If a field is not physically present, return null.
-    6. COORDINATE REASONING: Associate extracted text with the specific page it was found on.
+    CRITICAL INTELLIGENCE RULES:
+    1. DISCOUNT DISCOVERY: Look for terms like '2/10 Net 30' or '1% discount'. If found, set 'specialized.invoice.has_discount_opportunity' to true.
+    2. GL CODING: Based on the vendor name and the line items, suggest a standard General Ledger (GL) code (e.g., '6100 - Office Supplies', '7200 - Professional Services').
+    3. FINANCIAL RECONCILIATION: Components (subtotal, tax, shipping) must balance to the total.
+    4. LINE ITEMS: Extract every line item with description, quantity, unit price, and amount.
+    5. CONFIDENCE SCORES: Provide a confidence score (0.0 to 1.0) for every field AND every single line item extracted.
+    6. VENDOR IDENTIFICATION: Extract full legal entity name.
+    7. DATA TYPING: Dates in ISO-8601, Numbers as floats.
     
     Return the result in strict JSON format matching the schema.`;
 
@@ -42,7 +43,7 @@ export class GeminiService {
       config: {
         responseMimeType: "application/json",
         responseSchema: EXTRACTION_SCHEMA as any,
-        temperature: 0.1, // Near-deterministic for data extraction
+        temperature: 0.1,
       }
     });
 
@@ -54,7 +55,7 @@ export class GeminiService {
       return result as ExtractionResult;
     } catch (error) {
       console.error("Gemini Extraction Failure:", error);
-      throw new Error("The AI failed to parse the document structure reliably. Please try a higher-resolution scan.");
+      throw new Error("The AI failed to parse the document structure reliably.");
     }
   }
 

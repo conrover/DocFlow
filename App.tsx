@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { db } from './services/db';
 import { DocumentRecord, DocStatus, User } from './types';
 import Navbar from './components/Navbar';
@@ -8,26 +8,31 @@ import Dashboard from './components/Dashboard';
 import DocumentList from './components/DocumentList';
 import DocumentDetails from './components/DocumentDetails';
 import AdminPanel from './components/AdminPanel';
+import Reports from './components/Reports';
 import Auth from './components/Auth';
 import Chatbot from './components/Chatbot';
 import LandingPage from './components/LandingPage';
+import DeveloperPortal from './components/DeveloperPortal';
 
-type View = 'dashboard' | 'documents' | 'details' | 'admin';
+type View = 'dashboard' | 'documents' | 'details' | 'admin' | 'reports' | 'developers';
+type AuthMode = 'LOGIN' | 'REGISTER';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isOnLanding, setIsOnLanding] = useState(true);
-  const [isAuthMode, setIsAuthMode] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [docs, setDocs] = useState<DocumentRecord[]>([]);
+  const [isReady, setIsReady] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const user = db.getCurrentUser();
     if (user) {
       setCurrentUser(user);
       setIsOnLanding(false);
     }
+    setIsReady(true);
   }, []);
 
   useEffect(() => {
@@ -55,7 +60,7 @@ const App: React.FC = () => {
     db.logout();
     setCurrentUser(null);
     setIsOnLanding(true);
-    setIsAuthMode(false);
+    setAuthMode(null);
     setCurrentView('dashboard');
     setSelectedDocId(null);
     setDocs([]);
@@ -64,30 +69,30 @@ const App: React.FC = () => {
   const handleAuthSuccess = (user: User) => {
     setCurrentUser(user);
     setIsOnLanding(false);
-    setIsAuthMode(false);
+    setAuthMode(null);
   };
 
-  // 1. If not logged in and on landing page
+  if (!isReady) return null;
+
   if (!currentUser && isOnLanding) {
     return (
       <LandingPage 
-        onGetStarted={() => { setIsOnLanding(false); setIsAuthMode(true); }}
-        onLogin={() => { setIsOnLanding(false); setIsAuthMode(true); }}
+        onGetStarted={() => { setIsOnLanding(false); setAuthMode('REGISTER'); }}
+        onLogin={() => { setIsOnLanding(false); setAuthMode('LOGIN'); }}
       />
     );
   }
 
-  // 2. If not logged in and in auth mode
-  if (!currentUser && isAuthMode) {
+  if (!currentUser && authMode) {
     return (
       <Auth 
+        initialMode={authMode}
         onAuthSuccess={handleAuthSuccess} 
-        onBackToHome={() => { setIsOnLanding(true); setIsAuthMode(false); }}
+        onBackToHome={() => { setIsOnLanding(true); setAuthMode(null); }}
       />
     );
   }
 
-  // 3. Logged in App State
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 relative">
       <Sidebar 
@@ -116,14 +121,18 @@ const App: React.FC = () => {
             <DocumentDetails 
               docId={selectedDocId} 
               onBack={handleBack} 
+              onNavigate={navigateToDoc}
             />
           )}
           
+          {currentView === 'reports' && <Reports />}
+          
           {currentView === 'admin' && <AdminPanel />}
+
+          {currentView === 'developers' && <DeveloperPortal />}
         </main>
       </div>
 
-      {/* Floating AI Chatbot */}
       <Chatbot />
     </div>
   );

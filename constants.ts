@@ -64,7 +64,23 @@ export const EXTRACTION_SCHEMA = {
             tax: { type: Type.NUMBER, nullable: true },
             shipping: { type: Type.NUMBER, nullable: true },
             total: { type: Type.NUMBER, nullable: true },
-            po_number: { type: Type.STRING, nullable: true }
+            po_number: { type: Type.STRING, nullable: true },
+            line_items: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  description: { type: Type.STRING, nullable: true },
+                  quantity: { type: Type.NUMBER, nullable: true },
+                  unit_price: { type: Type.NUMBER, nullable: true },
+                  amount: { type: Type.NUMBER, nullable: true },
+                  confidence: { type: Type.NUMBER }
+                }
+              }
+            },
+            gl_code_suggestion: { type: Type.STRING, nullable: true, description: "Suggested accounting General Ledger code based on vendor and items." },
+            payment_terms: { type: Type.STRING, nullable: true, description: "Extracted payment terms (e.g. Net 30, 2/10 Net 30)." },
+            has_discount_opportunity: { type: Type.BOOLEAN, description: "True if an early payment discount is available." }
           }
         },
         purchase_order: {

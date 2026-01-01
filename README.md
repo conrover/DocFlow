@@ -1,20 +1,42 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# 🚀 DocFlow - AP Audit Intelligence
 
-This contains everything you need to run your app locally.
+A production-grade document digitization SaaS for structured data extraction using Gemini.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1IVdfg-GEh7PM7r2l_AS1Gh1yQgrLaefb
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/your-username/your-repo-name)
 
-## Run Locally
+## 🛠️ Quick Start
 
-**Prerequisites:**  Node.js
+### Option A: Vercel Dashboard (Recommended)
+1. **Push to GitHub**: Create a new repo and push your code.
+2. **Import to Vercel**: Go to [vercel.com/new](https://vercel.com/new).
+3. **Environment Variables**: Add `VITE_API_KEY` in the "Environment Variables" section.
+4. **Deploy**: Vercel detects Vite automatically. Click **Deploy**.
 
+### Option B: Vercel CLI
+If you prefer the terminal:
+```bash
+# 1. Install CLI
+npm i -g vercel
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# 2. Login
+vercel login
+
+# 3. Link project
+vercel link
+
+# 4. Set your Gemini API Key
+vercel env add VITE_API_KEY
+
+# 5. Deploy to Production
+vercel --prod
+```
+
+## 🏗️ Architecture Note
+- **Frontend**: React 19 + Vite + Tailwind CSS
+- **AI Engine**: Gemini 3 Flash (Extraction) & Gemini 3 Pro (Chat)
+- **Storage**: IndexedDB (Local persistent blob storage for PDFs)
+- **Routing**: Handled by Vercel Rewrites in `vercel.json`
+
+## 🔒 Security
+The application is configured with strict security headers (XSS protection, Frame Deny) via `vercel.json`. Ensure you restrict your Google AI API key to your specific Vercel domain in the Google AI Dashboard.

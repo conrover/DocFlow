@@ -1,14 +1,14 @@
 
-import { DocumentRecord, DocStatus, Destination, ExportJob, ValidationResult, DocType, User } from "../types";
+import { DocumentRecord, DocStatus, Destination, ExportJob, ValidationResult, DocType, User, UserRole, MatchingState, APIToken } from "../types";
 
 const DOCS_KEY = 'docflow_documents';
 const DEST_KEY = 'docflow_destinations';
 const EXPORT_KEY = 'docflow_export_jobs';
 const USERS_KEY = 'docflow_users';
 const CURRENT_USER_KEY = 'docflow_current_user';
+const TOKENS_KEY = 'docflow_api_tokens';
 
 export const db = {
-  // Auth Services
   getUsers: (): User[] => {
     const data = localStorage.getItem(USERS_KEY);
     return data ? JSON.parse(data) : [];
@@ -19,9 +19,9 @@ export const db = {
     if (users.find(u => u.email === user.email)) {
       throw new Error("User already exists");
     }
-    // Generate a default unique inbound address
     const uniqueHash = Math.random().toString(36).substring(2, 6);
     user.inboundAddress = `inbox_${uniqueHash}@inbound.docflow.io`;
+    user.role = user.role || UserRole.ADMIN;
     
     users.push(user);
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
@@ -34,7 +34,6 @@ export const db = {
       users[idx] = updatedUser;
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
       
-      // Update session/local storage for current user
       const isPersistent = !!localStorage.getItem(CURRENT_USER_KEY);
       const storage = isPersistent ? localStorage : sessionStorage;
       storage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedUser));
@@ -63,7 +62,28 @@ export const db = {
     return data ? JSON.parse(data) : null;
   },
 
-  // Scoped Data Services
+  getTokens: (): APIToken[] => {
+    const user = db.getCurrentUser();
+    if (!user) return [];
+    const data = localStorage.getItem(TOKENS_KEY);
+    const allTokens: APIToken[] = data ? JSON.parse(data) : [];
+    return allTokens.filter(t => t.userId === user.id);
+  },
+
+  saveToken: (token: APIToken) => {
+    const data = localStorage.getItem(TOKENS_KEY);
+    let allTokens: APIToken[] = data ? JSON.parse(data) : [];
+    allTokens.push(token);
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(allTokens));
+  },
+
+  deleteToken: (id: string) => {
+    const data = localStorage.getItem(TOKENS_KEY);
+    let allTokens: APIToken[] = data ? JSON.parse(data) : [];
+    const filtered = allTokens.filter(t => t.id !== id);
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(filtered));
+  },
+
   getDocuments: (): DocumentRecord[] => {
     const user = db.getCurrentUser();
     if (!user) return [];
@@ -89,17 +109,70 @@ export const db = {
     localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
   },
 
-  getDocument: (id: string): DocumentRecord | undefined => {
-    return db.getDocuments().find(d => d.id === id);
-  },
-
-  deleteDocument: (id: string) => {
+  bulkUpdateDocuments: (docs: DocumentRecord[]) => {
     const user = db.getCurrentUser();
     if (!user) return;
     const data = localStorage.getItem(DOCS_KEY);
     let allDocs: DocumentRecord[] = data ? JSON.parse(data) : [];
-    allDocs = allDocs.filter(d => d.id !== id || d.userId !== user.id);
+    
+    docs.forEach(doc => {
+      const existingIndex = allDocs.findIndex(d => d.id === doc.id);
+      if (existingIndex > -1) {
+        allDocs[existingIndex] = { ...doc, userId: user.id };
+      }
+    });
+    
     localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
+  },
+
+  getDocument: (id: string): DocumentRecord | undefined => {
+    return db.getDocuments().find(d => d.id === id);
+  },
+
+  getAdjacentDocIds: (currentId: string): { prev: string | null, next: string | null } => {
+    const docs = db.getDocuments().sort((a, b) => b.createdAt - a.createdAt);
+    const idx = docs.findIndex(d => d.id === currentId);
+    if (idx === -1) return { prev: null, next: null };
+    return {
+      prev: idx > 0 ? docs[idx - 1].id : null,
+      next: idx < docs.length - 1 ? docs[idx + 1].id : null
+    };
+  },
+
+  getAnalytics: () => {
+    const docs = db.getDocuments();
+    const totalProcessed = docs.length;
+    const reprocessed = docs.filter(d => d.auditTrail.some(a => a.action === 'REPROCESS')).length;
+    const billable = totalProcessed * 0.10;
+    
+    return {
+      totalProcessed,
+      reprocessed,
+      billable,
+      approved: docs.filter(d => d.status === DocStatus.APPROVED || d.status === DocStatus.EXPORTED).length,
+      exceptions: docs.filter(d => d.status === DocStatus.NEEDS_REVIEW || d.status === DocStatus.FAILED).length
+    };
+  },
+
+  simulateThreeWayMatch: (doc: DocumentRecord): MatchingState => {
+    const inv = doc.extraction?.specialized.invoice;
+    if (!inv || !inv.po_number) {
+      return { po_match: 'NOT_FOUND', receipt_match: 'NOT_FOUND', variances: ['No PO reference found on invoice.'] };
+    }
+    const poNum = inv.po_number.toUpperCase();
+    const variances: string[] = [];
+    let poMatch: MatchingState['po_match'] = 'MATCHED';
+    let recMatch: MatchingState['receipt_match'] = 'MATCHED';
+
+    if (poNum.includes('99')) {
+      poMatch = 'VARIANCE';
+      variances.push('Price Variance: Invoice unit price ($250.00) differs from PO unit price ($225.00)');
+    } else if (poNum.includes('11')) {
+      recMatch = 'VARIANCE';
+      variances.push('Quantity Variance: Invoiced (50) exceeds Received (45)');
+    }
+
+    return { po_match: poMatch, receipt_match: recMatch, variances };
   },
 
   validateExtraction: (doc: DocumentRecord): ValidationResult => {
@@ -110,7 +183,6 @@ export const db = {
     let isDuplicate = false;
     let mathBalanced = true;
 
-    // Duplicate Check (scoped to user)
     if (doc_type === DocType.INVOICE && specialized.invoice) {
       const currentInv = specialized.invoice;
       const userDocs = db.getDocuments();
@@ -127,7 +199,6 @@ export const db = {
       }
     }
 
-    // Required Fields & Math Checks
     if (doc_type === DocType.INVOICE && specialized.invoice) {
       const inv = specialized.invoice;
       if (!inv.supplier_name) errors.push('Missing supplier name');
@@ -168,7 +239,6 @@ export const db = {
     const allDests: Destination[] = data ? JSON.parse(data) : [];
     const userDests = allDests.filter(d => d.userId === user.id);
     
-    // Default mock destinations if user has none
     if (userDests.length === 0) {
       return [
         { id: 'dest-1', userId: user.id, name: 'SAP Ariba Webhook', type: 'ariba_cxml', config: { url: 'https://ariba-mock.docflow.io/v1/invoices', headers: { 'X-API-KEY': 'prod_key_123' } } },
@@ -206,5 +276,48 @@ export const db = {
       jobs[idx] = job;
       localStorage.setItem(EXPORT_KEY, JSON.stringify(jobs));
     }
+  },
+
+  generateCSVFromDocs: (docs: DocumentRecord[]): string => {
+    const header = [
+      'vendor_name',
+      'invoice_number',
+      'invoice_date',
+      'due_date',
+      'po_number',
+      'gl_code_suggested',
+      'payment_terms',
+      'currency',
+      'subtotal',
+      'tax_amount',
+      'shipping_amount',
+      'total_amount',
+      'audit_status',
+      'audit_trace_id',
+      'export_timestamp'
+    ].join(',');
+
+    const rows = docs.map(doc => {
+      const inv = doc.extraction?.specialized.invoice;
+      return [
+        `"${(inv?.supplier_name || 'Unknown').replace(/"/g, '""')}"`,
+        `"${(inv?.invoice_number || '').replace(/"/g, '""')}"`,
+        `"${inv?.invoice_date || ''}"`,
+        `"${inv?.due_date || ''}"`,
+        `"${(inv?.po_number || '').replace(/"/g, '""')}"`,
+        `"${(inv?.gl_code_suggestion || '').replace(/"/g, '""')}"`,
+        `"${(inv?.payment_terms || '').replace(/"/g, '""')}"`,
+        `"${inv?.currency || 'USD'}"`,
+        inv?.subtotal || 0,
+        inv?.tax || 0,
+        inv?.shipping || 0,
+        inv?.total || 0,
+        `"${doc.status}"`,
+        `"${doc.id}"`,
+        `"${new Date().toISOString()}"`
+      ].join(',');
+    });
+
+    return [header, ...rows].join('\n');
   }
 };

@@ -1,7 +1,6 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { db } from '../services/db';
-import { workflowService } from '../services/workflow';
 import { DocumentRecord, DocStatus } from '../types';
 
 interface DashboardProps {
@@ -11,31 +10,6 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ docs, onViewDocs, onSelectDoc }) => {
-  const [isSimulating, setIsSimulating] = useState(false);
-  const user = db.getCurrentUser();
-
-  const resolvedHandle = user?.orgHandle 
-    ? `${user.orgHandle}@inbound.docflow.io` 
-    : (user?.inboundAddress || 'inbound channel');
-
-  const handleEmailSimulation = async () => {
-    setIsSimulating(true);
-    // Create a mock File object to represent an attachment
-    const mockFileContent = "Mock Invoice PDF content";
-    const file = new File([mockFileContent], `inv_mail_${Math.floor(Math.random()*1000)}.pdf`, { type: 'application/pdf' });
-    
-    try {
-      await workflowService.processInboundDocument(file, 'EMAIL', () => {
-        // Parent App component refreshDocs handles the update via state change
-      });
-      alert(`Simulation successful! Document ingested via branded gateway: ${resolvedHandle}`);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
   const duplicateDollars = docs
     .filter(d => d.validation?.isDuplicate)
     .reduce((sum, d) => sum + (d.extraction?.specialized.invoice?.total || 0), 0);
@@ -61,13 +35,6 @@ const Dashboard: React.FC<DashboardProps> = ({ docs, onViewDocs, onSelectDoc }) 
           <p className="text-slate-500 font-medium text-sm">Monitor extraction velocity and financial risk controls.</p>
         </div>
         <div className="flex space-x-3">
-          <button 
-            onClick={handleEmailSimulation}
-            disabled={isSimulating}
-            className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50"
-          >
-            {isSimulating ? 'Receiving Mail...' : 'Simulator: Inbound Email'}
-          </button>
           <button 
             onClick={onViewDocs}
             className="bg-white border border-slate-200 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 shadow-sm transition-all"

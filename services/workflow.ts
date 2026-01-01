@@ -1,15 +1,21 @@
 
 import { db } from './db';
 import { geminiService } from './gemini';
-import { DocumentRecord, DocStatus, DocType, IngestionSource } from '../types';
+import { storageService } from './storage';
+import { DocumentRecord, DocStatus, DocType, IngestionSource, AuditEntry } from '../types';
 
 export const workflowService = {
   async processInboundDocument(file: File, source: IngestionSource = 'MANUAL', onUpdate?: () => void) {
     const currentUser = db.getCurrentUser();
     if (!currentUser) throw new Error("Authentication required");
 
+    const docId = Math.random().toString(36).substr(2, 9);
+    
+    // Step 1: Persist the blob immediately to IndexedDB
+    await storageService.saveBlob(docId, file);
+
     const newDoc: DocumentRecord = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: docId,
       userId: currentUser.id,
       filename: file.name,
       source: source,
@@ -17,7 +23,7 @@ export const workflowService = {
       type: DocType.UNKNOWN,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      fileUrl: URL.createObjectURL(file),
+      fileUrl: '', // No longer using temporary blob URLs in the record
       auditTrail: [{
         timestamp: Date.now(),
         user: source === 'EMAIL' ? 'Mail Daemon' : currentUser.name,
@@ -33,13 +39,35 @@ export const workflowService = {
 
     try {
       const extraction = await geminiService.extractFromDocument(file);
+      const validation = db.validateExtraction({ ...newDoc, extraction });
+      
+      const confidences = extraction.fields.map(f => f.confidence);
+      const avgConfidence = confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
+      
+      let finalStatus = DocStatus.NEEDS_REVIEW;
+      const additionalAudit: AuditEntry[] = [];
+      
+      if (currentUser.autoApproveEnabled && validation.valid && !validation.isDuplicate && !validation.errors.length) {
+        const threshold = (currentUser.autoApproveThreshold ?? 98) / 100;
+        if (avgConfidence >= threshold) {
+          finalStatus = DocStatus.APPROVED;
+          additionalAudit.push({
+            timestamp: Date.now(),
+            user: 'Automation Intelligence',
+            action: 'AUTO_APPROVE',
+            details: `Straight-through processed (STP). Avg confidence (${Math.round(avgConfidence * 100)}%) >= threshold (${currentUser.autoApproveThreshold}%). No audit exceptions found.`
+          });
+        }
+      }
+
       const updatedDoc = {
         ...newDoc,
-        status: DocStatus.NEEDS_REVIEW,
+        status: finalStatus,
         type: extraction.doc_type,
         extraction,
-        validation: db.validateExtraction({ ...newDoc, extraction }),
-        updatedAt: Date.now()
+        validation,
+        updatedAt: Date.now(),
+        auditTrail: [...newDoc.auditTrail, ...additionalAudit]
       };
       db.saveDocument(updatedDoc);
     } catch (error: any) {
@@ -54,12 +82,13 @@ export const workflowService = {
       if (onUpdate) onUpdate();
     }
     
-    return newDoc.id;
+    return docId;
   },
 
   async reprocessDocument(docId: string, onUpdate?: () => void) {
     const doc = db.getDocument(docId);
-    if (!doc) return;
+    const currentUser = db.getCurrentUser();
+    if (!doc || !currentUser) return;
 
     const updatedDoc: DocumentRecord = {
       ...doc,
@@ -67,7 +96,7 @@ export const workflowService = {
       updatedAt: Date.now(),
       auditTrail: [...doc.auditTrail, {
         timestamp: Date.now(),
-        user: db.getCurrentUser()?.name || 'System',
+        user: currentUser.name || 'System',
         action: 'REPROCESS',
         details: 'Manual re-extraction triggered.'
       }]
@@ -77,19 +106,42 @@ export const workflowService = {
     if (onUpdate) onUpdate();
 
     try {
-      // Fetch the file from URL
-      const response = await fetch(doc.fileUrl);
-      const blob = await response.blob();
+      // Retrieve original file from persistent storage
+      const blob = await storageService.getBlob(docId);
+      if (!blob) throw new Error("Original source file lost from persistent storage.");
+      
       const file = new File([blob], doc.filename, { type: blob.type });
 
       const extraction = await geminiService.extractFromDocument(file);
+      const validation = db.validateExtraction({ ...updatedDoc, extraction });
+
+      const confidences = extraction.fields.map(f => f.confidence);
+      const avgConfidence = confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
+      
+      let finalStatus = DocStatus.NEEDS_REVIEW;
+      const additionalAudit: AuditEntry[] = [];
+      
+      if (currentUser.autoApproveEnabled && validation.valid && !validation.isDuplicate && !validation.errors.length) {
+        const threshold = (currentUser.autoApproveThreshold ?? 98) / 100;
+        if (avgConfidence >= threshold) {
+          finalStatus = DocStatus.APPROVED;
+          additionalAudit.push({
+            timestamp: Date.now(),
+            user: 'Automation Intelligence',
+            action: 'AUTO_APPROVE',
+            details: `Reprocess auto-approved. Confidence metrics met STP criteria.`
+          });
+        }
+      }
+
       const finalDoc = {
         ...updatedDoc,
-        status: DocStatus.NEEDS_REVIEW,
+        status: finalStatus,
         type: extraction.doc_type,
         extraction,
-        validation: db.validateExtraction({ ...updatedDoc, extraction }),
-        updatedAt: Date.now()
+        validation,
+        updatedAt: Date.now(),
+        auditTrail: [...updatedDoc.auditTrail, ...additionalAudit]
       };
       db.saveDocument(finalDoc);
     } catch (error: any) {
