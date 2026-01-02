@@ -4,8 +4,19 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 
 declare global {
-  // Use the existing global AIStudio type to avoid conflicts with system-level declarations.
+  /**
+   * Defines the AIStudio interface globally to match the environment's expected type.
+   */
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
   interface Window {
+    /**
+     * Declares the aistudio property using the AIStudio interface to ensure 
+     * compatibility with existing global definitions and modifiers.
+     */
     aistudio: AIStudio;
   }
   namespace NodeJS {
