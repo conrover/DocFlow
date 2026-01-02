@@ -11,38 +11,47 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Token Authorization Check
+  // We check both the Authorization header AND the query parameter for webhook compatibility.
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer df_')) {
-    return res.status(401).json({ error: 'Invalid or missing Authorization token' });
+  const queryToken = req.query.token;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : queryToken;
+
+  if (!token || !token.startsWith('df_')) {
+    return res.status(401).json({ error: 'Invalid or missing Gateway Token (df_...)' });
   }
 
   try {
-    const { filename, mimeType, base64Data, emailMetadata } = req.body;
+    // Handle different webhook payload formats
+    // filename/mimeType/base64Data for direct API
+    // attachments[0] for common email parse providers
+    let { filename, mimeType, base64Data, emailMetadata, attachments } = req.body;
 
-    if (!base64Data) {
-      return res.status(400).json({ error: 'Missing document payload (base64Data)' });
+    // If using a standard Inbound Parse service, they might send an array of attachments
+    if (attachments && attachments.length > 0) {
+      const first = attachments[0];
+      base64Data = first.content || first.base64; // Depends on the provider's schema
+      filename = first.filename;
+      mimeType = first.contentType || first.type;
     }
 
-    // Initialize AI on the server
+    if (!base64Data) {
+      return res.status(400).json({ error: 'Missing document payload. Ensure the email has an attachment.' });
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // System instruction for the "Inbound Gateway" firewall
     const systemInstruction = `Act as a Strategic AP Controller and Document Firewall.
-    Your primary job is to classify and extract data from financial documents.
+    Analyze the provided attachment. 
     
-    REJECTION CRITERIA:
-    - If the document is NOT an Invoice, Purchase Order (PO), Receipt, or Packing Slip, you MUST set "doc_type" to "unknown" in the JSON.
-    - If rejected, add a warning: "INVALID_DOCUMENT_TYPE: This document is not a recognized financial instrument (Invoice/PO/Packing Slip)."
+    VALIDATION:
+    - If the document is NOT an Invoice, PO, Receipt, or Packing Slip, set "doc_type" to "unknown".
     
-    EXTRACTION RULES:
-    - For valid documents, extract all fields: vendor, amounts, dates, line items, and currency.
-    - Provide a "gl_code_suggestion" based on the vendor and line items.
-    - Identify early payment discount opportunities (e.g., 2/10 Net 30).
+    CONTEXT:
+    - Sender: ${emailMetadata?.from || req.body.from || 'Unknown'}
+    - Subject: ${emailMetadata?.subject || req.body.subject || 'No Subject'}
     
-    EMAIL CONTEXT:
-    The document was sent via email from: ${emailMetadata?.from || 'Unknown'}.
-    Subject line: ${emailMetadata?.subject || 'No Subject'}.
-    Use this context to help identify the vendor if the document is blurry.`;
+    Return strictly valid JSON extraction results.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -67,11 +76,8 @@ export default async function handler(req: any, res: any) {
 
     const extraction = JSON.parse(response.text || '{}');
 
-    // Return the result to the caller
-    // In a real scenario, this would also write to a Postgres DB here.
     return res.status(200).json({
       status: extraction.doc_type === 'unknown' ? 'rejected' : 'ingested',
-      source: emailMetadata ? 'EMAIL' : 'API',
       docId: `doc_${Math.random().toString(36).substr(2, 9)}`,
       extraction,
       receivedAt: new Date().toISOString()

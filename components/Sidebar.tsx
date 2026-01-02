@@ -21,17 +21,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
 
   const filteredNavItems = allNavItems.filter(item => user && item.roles.includes(user.role));
 
-  const resolvedAddress = user?.orgHandle 
-    ? `${user.orgHandle}@sandbox.docflow.io` 
-    : (user?.inboundAddress || 'Generating...');
-
-  const copyToClipboard = () => {
-    if (resolvedAddress !== 'Generating...') {
-      navigator.clipboard.writeText(resolvedAddress);
-      alert('Simulation address copied. Use the Inbound Simulator in Connectors to send test documents.');
-    }
-  };
-
   return (
     <aside className="w-64 bg-slate-900 flex-shrink-0 flex flex-col font-sans border-r border-slate-800">
       <div className="h-24 flex items-center px-6 border-b border-slate-800 bg-slate-900/50">
@@ -60,25 +49,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
       </nav>
       
       <div className="p-6 space-y-6 border-t border-slate-800">
-        <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-800/50 hover:border-blue-500/30 transition-all">
+        <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-800/50 hover:border-blue-500/30 transition-all cursor-pointer" onClick={() => setView('developers')}>
           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center justify-between">
             <span className="flex items-center">
               <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-2"></span>
-              Gateway Sandbox
+              SMTP Bridge
             </span>
-            <span className="text-[7px] bg-slate-900 px-1 py-0.5 rounded text-slate-400">Sim Only</span>
+            <span className="text-[7px] bg-slate-900 px-1 py-0.5 rounded text-slate-400">Action Req</span>
           </p>
-          <div className="flex items-center justify-between group">
-            <span className="text-[10px] font-mono text-blue-400 truncate pr-2 font-bold group-hover:text-blue-300 transition-colors">
-              {resolvedAddress}
-            </span>
-            <button 
-              onClick={copyToClipboard}
-              className="text-slate-600 hover:text-white transition-colors p-1 hover:bg-slate-700 rounded-lg"
-              title="Copy Simulation Address"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-            </button>
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-slate-300 leading-tight uppercase">Connect real Gmail accounts</p>
+            <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest hover:underline">Setup Guide →</p>
           </div>
         </div>
 

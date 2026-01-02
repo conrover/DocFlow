@@ -17,8 +17,8 @@ declare global {
      * Internal AI Studio interface for API key management.
      * Inlined to prevent TS2304 resolution errors during build.
      */
-    // Fix: Removed 'readonly' modifier to ensure identity with external ambient declarations.
-    aistudio: AIStudio;
+    // Fix: Restored 'readonly' modifier to ensure identity with external ambient declarations.
+    readonly aistudio: AIStudio;
   }
 
   namespace NodeJS {
