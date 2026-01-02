@@ -11,7 +11,6 @@ export const workflowService = {
 
     const docId = Math.random().toString(36).substr(2, 9);
     
-    // Step 1: Persist the blob immediately to IndexedDB
     await storageService.saveBlob(docId, file);
 
     const newDoc: DocumentRecord = {
@@ -23,14 +22,14 @@ export const workflowService = {
       type: DocType.UNKNOWN,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      fileUrl: '', // No longer using temporary blob URLs in the record
+      fileUrl: '',
       auditTrail: [{
         timestamp: Date.now(),
-        user: source === 'EMAIL' ? 'Mail Daemon' : currentUser.name,
+        user: source === 'EMAIL' ? 'Mail Daemon' : (source === 'API' ? 'API Gateway' : currentUser.name),
         action: 'INGEST',
         details: source === 'EMAIL' 
           ? `Inbound email received at ${currentUser.inboundAddress}. Attachment detected.`
-          : 'Manual document transmit initiated.'
+          : source === 'API' ? 'Payload received via REST API connector.' : 'Manual document transmit initiated.'
       }]
     };
     
@@ -39,8 +38,32 @@ export const workflowService = {
 
     try {
       const extraction = await geminiService.extractFromDocument(file);
-      const validation = db.validateExtraction({ ...newDoc, extraction });
       
+      // Step: Validate Document Type Integrity
+      if (extraction.doc_type === DocType.UNKNOWN || (extraction.warnings && extraction.warnings.some(w => w.includes('NOT_A_VALID_DOCUMENT')))) {
+        const failedDoc: DocumentRecord = {
+          ...newDoc,
+          status: DocStatus.FAILED,
+          type: DocType.UNKNOWN,
+          extraction,
+          lastError: { 
+            code: 'INVALID_DOC_TYPE', 
+            message: 'The uploaded file is not a valid financial document (Invoice/PO/Receipt).' 
+          },
+          updatedAt: Date.now(),
+          auditTrail: [...newDoc.auditTrail, {
+            timestamp: Date.now(),
+            user: 'Security Firewall',
+            action: 'REJECT',
+            details: 'Document classification failed. Content does not match financial schemas.'
+          }]
+        };
+        db.saveDocument(failedDoc);
+        if (onUpdate) onUpdate();
+        return docId;
+      }
+
+      const validation = db.validateExtraction({ ...newDoc, extraction });
       const confidences = extraction.fields.map(f => f.confidence);
       const avgConfidence = confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
       
@@ -106,15 +129,18 @@ export const workflowService = {
     if (onUpdate) onUpdate();
 
     try {
-      // Retrieve original file from persistent storage
       const blob = await storageService.getBlob(docId);
       if (!blob) throw new Error("Original source file lost from persistent storage.");
       
       const file = new File([blob], doc.filename, { type: blob.type });
 
       const extraction = await geminiService.extractFromDocument(file);
-      const validation = db.validateExtraction({ ...updatedDoc, extraction });
+      
+      if (extraction.doc_type === DocType.UNKNOWN) {
+        throw new Error("Re-classification failed. Document remains invalid.");
+      }
 
+      const validation = db.validateExtraction({ ...updatedDoc, extraction });
       const confidences = extraction.fields.map(f => f.confidence);
       const avgConfidence = confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0;
       

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -18,8 +17,8 @@ declare global {
      * Internal AI Studio interface for API key management.
      * Inlined to prevent TS2304 resolution errors during build.
      */
-    // Fix: Use the AIStudio interface instead of a literal type to ensure identical modifiers and matching types as required by the environment.
-    aistudio: AIStudio;
+    // Fix: Restored 'readonly' modifier to ensure identity with external ambient declarations.
+    readonly aistudio: AIStudio;
   }
 
   namespace NodeJS {

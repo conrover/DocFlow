@@ -1,24 +1,26 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { EXTRACTION_SCHEMA } from "../constants";
-import { ExtractionResult } from "../types";
+import { ExtractionResult, DocType } from "../types";
 
 export class GeminiService {
   async extractFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
-    // Correct initialization using process.env.API_KEY directly.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = `Act as a Strategic Controller and AP Automation Architect. 
     Analyze the provided document with extreme precision.
     
-    CRITICAL INTELLIGENCE RULES:
+    CRITICAL CLASSIFICATION RULE:
+    - First, determine if this is a valid financial document (Invoice, Purchase Order, Receipt, Packing List, or Statement).
+    - If the document is NOT one of these (e.g., a photo of a cat, a general letter, a passport, or random text), you MUST set "doc_type" to "unknown" and add exactly one warning: "NOT_A_VALID_DOCUMENT: The uploaded file is not a recognized financial instrument for AP processing."
+    
+    INTELLIGENCE RULES FOR VALID DOCUMENTS:
     1. DISCOUNT DISCOVERY: Look for terms like '2/10 Net 30' or '1% discount'. If found, set 'specialized.invoice.has_discount_opportunity' to true.
-    2. GL CODING: Based on the vendor name and the line items, suggest a standard General Ledger (GL) code (e.g., '6100 - Office Supplies', '7200 - Professional Services').
+    2. GL CODING: Based on the vendor name and the line items, suggest a standard General Ledger (GL) code.
     3. FINANCIAL RECONCILIATION: Components (subtotal, tax, shipping) must balance to the total.
     4. LINE ITEMS: Extract every line item with description, quantity, unit price, and amount.
-    5. CONFIDENCE SCORES: Provide a confidence score (0.0 to 1.0) for every field AND every single line item extracted.
+    5. CONFIDENCE SCORES: Provide a confidence score (0.0 to 1.0) for every field.
     6. VENDOR IDENTIFICATION: Extract full legal entity name.
-    7. DATA TYPING: Dates in ISO-8601, Numbers as floats.
     
     Return the result in strict JSON format matching the schema.`;
 
@@ -45,12 +47,11 @@ export class GeminiService {
     });
 
     try {
-      // Use the .text property directly to extract the string output.
       const text = response.text;
       if (!text) throw new Error("Empty response from AI engine.");
       
-      const result = JSON.parse(text);
-      return result as ExtractionResult;
+      const result = JSON.parse(text) as ExtractionResult;
+      return result;
     } catch (error) {
       console.error("Gemini Extraction Failure:", error);
       throw new Error("The AI failed to parse the document structure reliably.");
