@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // Standard Vercel Serverless Function (Node.js)
 export default async function handler(req: any, res: any) {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -16,28 +17,39 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { filename, mimeType, base64Data, metadata } = req.body;
+    const { filename, mimeType, base64Data, emailMetadata } = req.body;
 
     if (!base64Data) {
       return res.status(400).json({ error: 'Missing document payload (base64Data)' });
     }
 
     // Initialize AI on the server
-    // Fix: Use process.env.API_KEY exclusively as per SDK requirements.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Act as a Strategic Controller. Analyze this document. 
-    If it is NOT a valid financial document (Invoice/PO/Packing Slip), set "doc_type" to "unknown" 
-    and return a warning: "NOT_A_VALID_DOCUMENT".
-    Otherwise, extract all fields, line items, and suggest GL codes. 
-    Return strictly valid JSON.`;
+    // System instruction for the "Inbound Gateway" firewall
+    const systemInstruction = `Act as a Strategic AP Controller and Document Firewall.
+    Your primary job is to classify and extract data from financial documents.
+    
+    REJECTION CRITERIA:
+    - If the document is NOT an Invoice, Purchase Order (PO), Receipt, or Packing Slip, you MUST set "doc_type" to "unknown" in the JSON.
+    - If rejected, add a warning: "INVALID_DOCUMENT_TYPE: This document is not a recognized financial instrument (Invoice/PO/Packing Slip)."
+    
+    EXTRACTION RULES:
+    - For valid documents, extract all fields: vendor, amounts, dates, line items, and currency.
+    - Provide a "gl_code_suggestion" based on the vendor and line items.
+    - Identify early payment discount opportunities (e.g., 2/10 Net 30).
+    
+    EMAIL CONTEXT:
+    The document was sent via email from: ${emailMetadata?.from || 'Unknown'}.
+    Subject line: ${emailMetadata?.subject || 'No Subject'}.
+    Use this context to help identify the vendor if the document is blurry.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
           parts: [
-            { text: prompt },
+            { text: systemInstruction },
             {
               inlineData: {
                 data: base64Data,
@@ -53,14 +65,16 @@ export default async function handler(req: any, res: any) {
       }
     });
 
-    const result = JSON.parse(response.text || '{}');
+    const extraction = JSON.parse(response.text || '{}');
 
-    // Return the extraction to the sender (or you could save to a DB here)
+    // Return the result to the caller
+    // In a real scenario, this would also write to a Postgres DB here.
     return res.status(200).json({
-      status: 'success',
-      docId: Math.random().toString(36).substr(2, 9),
-      extraction: result,
-      ingestedAt: new Date().toISOString()
+      status: extraction.doc_type === 'unknown' ? 'rejected' : 'ingested',
+      source: emailMetadata ? 'EMAIL' : 'API',
+      docId: `doc_${Math.random().toString(36).substr(2, 9)}`,
+      extraction,
+      receivedAt: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Ingest Error:', error);
