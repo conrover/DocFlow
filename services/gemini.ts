@@ -1,14 +1,11 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { EXTRACTION_SCHEMA } from "../constants";
-import { ExtractionResult, DocType } from "../types";
+import { ExtractionResult } from "../types";
 
 export class GeminiService {
-  /**
-   * Performs deterministic financial data extraction using Gemini Flash.
-   * Emphasizes strategic AP intelligence like GL coding and discount discovery.
-   */
   async extractFromImage(base64Data: string, mimeType: string): Promise<ExtractionResult> {
+    // Correct initialization using process.env.API_KEY directly.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = `Act as a Strategic Controller and AP Automation Architect. 
@@ -48,6 +45,7 @@ export class GeminiService {
     });
 
     try {
+      // Use the .text property directly to extract the string output.
       const text = response.text;
       if (!text) throw new Error("Empty response from AI engine.");
       

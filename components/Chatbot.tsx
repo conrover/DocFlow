@@ -25,13 +25,13 @@ const Chatbot: React.FC = () => {
   }, [messages]);
 
   const getSystemContext = () => {
-    const docs = db.getDocuments();
+    const docs = db.getDocuments() || [];
     const summary = docs.map(d => ({
       vendor: d.extraction?.specialized.invoice?.supplier_name || 'Unknown',
       invNum: d.extraction?.specialized.invoice?.invoice_number || 'N/A',
       total: `${d.extraction?.specialized.invoice?.currency || 'USD'} ${d.extraction?.specialized.invoice?.total || 0}`,
       status: d.status,
-      confidence: (d.extraction?.fields.reduce((acc, f) => acc + f.confidence, 0) / (d.extraction?.fields.length || 1) * 100).toFixed(1) + '%',
+      confidence: (d.extraction?.fields?.length ? (d.extraction.fields.reduce((acc, f) => acc + f.confidence, 0) / d.extraction.fields.length * 100).toFixed(1) : '0') + '%',
       lineItems: d.extraction?.specialized.invoice?.line_items || []
     }));
 
@@ -48,6 +48,7 @@ const Chatbot: React.FC = () => {
   };
 
   const initChat = () => {
+    // Directly use process.env.API_KEY for initialization.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     chatInstanceRef.current = ai.chats.create({
       model: 'gemini-3-pro-preview',
@@ -70,6 +71,7 @@ const Chatbot: React.FC = () => {
     try {
       const chat = initChat();
       const response = await chat.sendMessage({ message: userMessage });
+      // Use .text property directly.
       const modelText = response.text || "I'm sorry, I couldn't process that request.";
       setMessages(prev => [...prev, { role: 'model', text: modelText }]);
     } catch (error) {
@@ -80,20 +82,15 @@ const Chatbot: React.FC = () => {
     }
   };
 
-  // Simple Markdown-to-HTML formatter for basic structure
   const formatText = (text: string) => {
     return text.split('\n').map((line, i) => {
-      // Bold
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-black">$1</strong>');
-      // Headers
       if (formatted.startsWith('### ')) {
         return <h3 key={i} className="text-sm font-black uppercase tracking-tight mt-4 mb-2 text-blue-600">{formatted.replace('### ', '')}</h3>;
       }
-      // List
       if (formatted.trim().startsWith('- ') || formatted.trim().startsWith('* ')) {
         return <li key={i} className="ml-4 list-disc text-xs mb-1" dangerouslySetInnerHTML={{ __html: formatted.replace(/^- |^\* /, '') }} />;
       }
-      // Table Row
       if (formatted.includes('|')) {
         return <div key={i} className="font-mono text-[9px] bg-slate-100 p-1 px-2 border-x border-slate-200" dangerouslySetInnerHTML={{ __html: formatted }} />;
       }

@@ -38,8 +38,7 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
   }, [status]);
 
   const checkAuthAndStart = async () => {
-    // Check if window.aistudio is available (it's injected in the environment)
-    if (window.aistudio) {
+    if (typeof window !== 'undefined' && window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         setStatus('AUTH_REQUIRED');
@@ -47,15 +46,14 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
         startGeneration();
       }
     } else {
-      // Fallback if not in AI Studio environment
       startGeneration();
     }
   };
 
   const handleSelectKey = async () => {
-    if (window.aistudio) {
+    if (typeof window !== 'undefined' && window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Assume success per instructions and proceed
+      // Assume selection successful and proceed immediately to mitigate race condition.
       startGeneration();
     }
   };
@@ -65,6 +63,7 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
     setProgress(5);
     
     try {
+      // Create a fresh GoogleGenAI instance right before making the API call to ensure it uses the latest key.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       let operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
@@ -76,7 +75,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
         }
       });
 
-      // Poll for completion
       while (!operation.done) {
         await new Promise(resolve => setTimeout(resolve, 10000));
         setProgress(prev => Math.min(prev + 8, 95));
@@ -85,6 +83,7 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
 
       const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (downloadLink) {
+        // Append API key when fetching from the download link.
         const fetchUrl = `${downloadLink}&key=${process.env.API_KEY}`;
         setVideoUrl(fetchUrl);
         setStatus('READY');
@@ -96,6 +95,7 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
     } catch (error: any) {
       console.error("Video Generation Error:", error);
       if (error.message?.includes("Requested entity was not found")) {
+        // If request fails with project-not-found, prompt for key selection again.
         setStatus('AUTH_REQUIRED');
       } else {
         setStatus('ERROR');
@@ -108,8 +108,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-500">
       <div className="bg-slate-900 w-full max-w-5xl rounded-[40px] shadow-2xl border border-slate-800 overflow-hidden flex flex-col aspect-video relative">
-        
-        {/* Close Button */}
         <button 
           onClick={onClose}
           className="absolute top-6 right-6 z-50 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all border border-white/10"
@@ -174,18 +172,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
               playsInline 
               className="w-full h-full object-cover"
             />
-            <div className="absolute bottom-10 left-10 right-10 flex justify-between items-end">
-               <div className="bg-slate-900/80 backdrop-blur-md p-6 rounded-3xl border border-white/10 shadow-2xl">
-                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Visualization Active</p>
-                  <p className="text-lg font-black text-white tracking-tighter uppercase leading-none">The Future of AP Audit</p>
-               </div>
-               <button 
-                onClick={onClose}
-                className="bg-white text-slate-900 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-100 transition-all active:scale-95"
-               >
-                 Close Demo
-               </button>
-            </div>
           </div>
         )}
 
@@ -199,7 +185,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
             <button onClick={startGeneration} className="text-blue-500 font-black uppercase text-[10px] tracking-widest hover:underline">Retry Synthesis</button>
           </div>
         )}
-
       </div>
     </div>
   );

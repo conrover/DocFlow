@@ -1,7 +1,12 @@
 
 import React from 'react';
 
-export const Logo: React.FC<{ className?: string; size?: number; hideText?: boolean }> = ({ className = "", size = 32, hideText = false }) => {
+export const Logo: React.FC<{ 
+  className?: string; 
+  size?: number; 
+  hideText?: boolean;
+  inverse?: boolean;
+}> = ({ className = "", size = 32, hideText = false, inverse = false }) => {
   return (
     <div className={`flex items-center space-x-3 group ${className}`}>
       <div className="relative" style={{ width: size, height: size }}>
@@ -25,15 +30,12 @@ export const Logo: React.FC<{ className?: string; size?: number; hideText?: bool
               <feGaussianBlur stdDeviation="2" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
-            <clipPath id="docClip">
-              <rect x="20" y="20" width="60" height="65" rx="10" />
-            </clipPath>
           </defs>
 
           {/* Background Shadow Layer */}
           <path 
             d="M30 25 L80 25 L80 80 L30 80 Z" 
-            fill="#1e293b" 
+            fill={inverse ? "#000" : "#1e293b"} 
             className="opacity-10 group-hover:translate-x-1 group-hover:translate-y-1 transition-transform" 
           />
 
@@ -89,10 +91,10 @@ export const Logo: React.FC<{ className?: string; size?: number; hideText?: bool
       
       {!hideText && (
         <div className="flex flex-col leading-none">
-          <span className="text-2xl font-black text-slate-900 tracking-tighter uppercase flex items-center">
+          <span className={`text-2xl font-black ${inverse ? 'text-white' : 'text-slate-900'} tracking-tighter uppercase flex items-center`}>
             DOC<span className="text-blue-600 ml-0.5">FLOW</span>
           </span>
-          <span className="text-[8px] font-black text-blue-500/60 tracking-[0.4em] uppercase ml-1 mt-0.5">
+          <span className={`text-[8px] font-black ${inverse ? 'text-blue-400/60' : 'text-blue-500/60'} tracking-[0.4em] uppercase ml-1 mt-0.5`}>
             Audit Intelligence
           </span>
         </div>

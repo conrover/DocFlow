@@ -32,6 +32,27 @@ vercel env add VITE_API_KEY
 vercel --prod
 ```
 
+## 🔄 Continuous Deployment Workflow
+
+DocFlow is configured for **CI/CD**. You never need to manually "build" for production once linked.
+
+### 1. Production Updates (Main Branch)
+Any code pushed to the `main` branch is automatically built and deployed to your live production URL.
+```bash
+git add .
+git commit -m "feat: added new audit rule"
+git push origin main
+```
+
+### 2. Preview Deployments (Feature Branches)
+If you work on a new feature in a separate branch, Vercel will generate a **Preview URL**. This allows you to test changes without affecting the live site.
+```bash
+git checkout -b feature/new-connector
+# ... make changes ...
+git push origin feature/new-connector
+# Check your Vercel Dashboard or GitHub PR for the unique preview link.
+```
+
 ## 🏗️ Architecture Note
 - **Frontend**: React 19 + Vite + Tailwind CSS
 - **AI Engine**: Gemini 3 Flash (Extraction) & Gemini 3 Pro (Chat)

@@ -23,7 +23,6 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [isDragging, setIsDragging] = useState(false);
   
-  // Advanced Filter State
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     status: 'all',
@@ -39,18 +38,15 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
 
   const filteredDocs = useMemo(() => {
     return docs.filter(doc => {
-      // Confidence calculation helper
-      const avgConf = doc.extraction?.fields.length 
-        ? doc.extraction.fields.reduce((acc, f) => acc + f.confidence, 0) / doc.extraction.fields.length 
+      const fields = doc.extraction?.fields || [];
+      const avgConf = fields.length 
+        ? fields.reduce((acc, f) => acc + f.confidence, 0) / fields.length 
         : 0;
 
-      // Status Filter
       if (filters.status !== 'all' && doc.status !== filters.status) return false;
       
-      // Eyeball Bucket (High Confidence Mode)
       if (filters.isHighConf && avgConf < 0.98) return false;
 
-      // Search Filter
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         const vendor = doc.extraction?.specialized.invoice?.supplier_name?.toLowerCase() || '';
@@ -58,7 +54,6 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
         if (!vendor.includes(searchLower) && !invNum.includes(searchLower)) return false;
       }
       
-      // Date Range Filter
       if (filters.dateRange !== 'all') {
         const now = Date.now();
         const oneDay = 24 * 60 * 60 * 1000;
@@ -67,7 +62,6 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
         if (filters.dateRange === 'month' && now - doc.createdAt > oneDay * 30) return false;
       }
       
-      // Risk Filter
       if (filters.hasRisk) {
         const matching = db.simulateThreeWayMatch(doc);
         const isCritical = doc.validation?.isDuplicate || !doc.validation?.mathBalanced || matching.po_match === 'VARIANCE' || matching.receipt_match === 'VARIANCE';
@@ -233,7 +227,12 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
             }`}
           >
             <span>Eyeball Bucket</span>
-            <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px]">{docs.filter(d => (d.extraction?.fields.reduce((acc, f) => acc + f.confidence, 0) / (d.extraction?.fields.length || 1)) >= 0.98).length}</span>
+            <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px]">
+              {docs.filter(d => {
+                const f = d.extraction?.fields || [];
+                return (f.length ? (f.reduce((acc, field) => acc + field.confidence, 0) / f.length) : 0) >= 0.98;
+              }).length}
+            </span>
           </button>
 
           <button 
@@ -325,10 +324,6 @@ const DocumentList: React.FC<DocumentListProps> = ({ docs, onSelect, onRefresh }
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredDocs.length > 0 ? filteredDocs.sort((a,b) => b.createdAt - a.createdAt).map((doc) => {
-                const avgConf = doc.extraction?.fields.length 
-                  ? doc.extraction.fields.reduce((acc, f) => acc + f.confidence, 0) / doc.extraction.fields.length 
-                  : 0;
-                
                 const matching = db.simulateThreeWayMatch(doc);
                 const hasCriticalMatch = matching.po_match === 'VARIANCE' || matching.receipt_match === 'VARIANCE';
 

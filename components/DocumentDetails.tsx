@@ -44,7 +44,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
         setEditLineItems([...(d.extraction.specialized.invoice.line_items || [])]);
       }
       
-      // Fetch file from persistent storage
       storageService.getBlob(docId).then(blob => {
         if (blob) {
           const url = URL.createObjectURL(blob);
@@ -52,16 +51,13 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
         }
       });
 
-      // Navigation context
       setAdjacentIds(db.getAdjacentDocIds(docId));
     }
     setExportJobs(db.getExportJobs(docId));
     setDestinations(db.getDestinations());
 
-    // Reset zoom on document change
     setZoomLevel(1);
 
-    // Cleanup blob URL on unmount
     return () => {
       if (persistentUrl) URL.revokeObjectURL(persistentUrl);
     };
@@ -202,7 +198,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
         if (showRejectModal) setShowRejectModal(false);
         else onBack();
       }
-      // Arrow navigation
       if (e.key === 'ArrowRight' && adjacentIds.next && onNavigate) {
         onNavigate(adjacentIds.next);
       }
@@ -277,7 +272,7 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
 
   const updateEditField = (key: string, value: any) => {
     if (isReadOnly) return;
-    setEditFields(prev => ({ ...prev, [key]: value }));
+    setEditFields((prev: any) => ({ ...prev, [key]: value }));
   };
 
   const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
@@ -297,7 +292,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
     setEditLineItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  // 3-Way Match Matcher State (Simulated)
   const matching = db.simulateThreeWayMatch(doc);
 
   return (
@@ -428,10 +422,9 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
 
       <div className="flex-1 flex overflow-hidden">
         <div className="w-[55%] bg-slate-100 border-r border-slate-200 relative overflow-hidden flex flex-col">
-          {/* Zoom Controller */}
           <div className="absolute top-6 right-6 z-20 flex flex-col space-y-2 bg-white/80 backdrop-blur-md p-2 rounded-2xl border border-slate-200 shadow-xl shadow-slate-900/10 transition-all hover:bg-white">
             <button 
-              onClick={() => setZoomLevel(prev => Math.min(prev + 0.25, 4))}
+              onClick={() => setZoomLevel((prev: number) => Math.min(prev + 0.25, 4))}
               className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-800 font-black text-xl transition-colors"
               title="Zoom In"
             >
@@ -447,7 +440,7 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
             </button>
             <div className="h-px bg-slate-200 mx-2"></div>
             <button 
-              onClick={() => setZoomLevel(prev => Math.max(prev - 0.25, 0.5))}
+              onClick={() => setZoomLevel((prev: number) => Math.max(prev - 0.25, 0.5))}
               className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-800 font-black text-xl transition-colors"
               title="Zoom Out"
             >
@@ -520,7 +513,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
                   </div>
                 </div>
 
-                {/* Editable Line Items Section */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Line Item Audit</h3>
@@ -644,14 +636,12 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
                   <div className="relative flex justify-between items-center py-4">
                     <div className="absolute top-1/2 left-0 w-full h-px bg-slate-800 -translate-y-1/2"></div>
                     
-                    {/* Invoice Node */}
                     <div className="relative z-10 flex flex-col items-center space-y-2">
                        <div className="w-12 h-12 rounded-2xl bg-white text-slate-900 flex items-center justify-center text-xl shadow-xl border-2 border-green-500">📄</div>
                        <span className="text-[9px] font-black uppercase tracking-widest">Invoice</span>
                        <span className="text-[8px] font-black text-green-500 uppercase">Verified</span>
                     </div>
 
-                    {/* PO Node */}
                     <div className="relative z-10 flex flex-col items-center space-y-2">
                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-xl border-2 transition-all ${
                          matching.po_match === 'MATCHED' ? 'bg-white text-slate-900 border-green-500' : 
@@ -664,7 +654,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
                        }`}>{matching.po_match.replace('_', ' ')}</span>
                     </div>
 
-                    {/* Receipt Node */}
                     <div className="relative z-10 flex flex-col items-center space-y-2">
                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-xl border-2 transition-all ${
                          matching.receipt_match === 'MATCHED' ? 'bg-white text-slate-900 border-green-500' : 
@@ -692,10 +681,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
                           </div>
                         </div>
                       ))}
-                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
-                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Auditor Protocol</p>
-                         <p className="text-[10px] font-medium text-slate-500 leading-relaxed">System has flagged a financial mismatch. Authorizing this payment without correction will create an audit exception in the General Ledger.</p>
-                      </div>
                     </div>
                   ) : (
                     <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 bg-slate-50 border-2 border-dashed border-slate-100 rounded-[32px]">
@@ -706,20 +691,6 @@ const DocumentDetails: React.FC<DocumentDetailsProps> = ({ docId, onBack, onNavi
                        </div>
                     </div>
                   )}
-                </div>
-
-                <div className="p-6 rounded-[32px] border border-slate-100 bg-slate-50 space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Matched System References</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
-                      <span>ERP Purchase Order</span>
-                      <span className="font-mono text-blue-600">{editFields.po_number || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
-                      <span>Warehouse Packing Slip</span>
-                      <span className="font-mono text-blue-600">{editFields.po_number ? `PS-${editFields.po_number.split('-')[1]}` : 'N/A'}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             ) : (
