@@ -63,7 +63,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
     setProgress(5);
     
     try {
-      // Create a fresh GoogleGenAI instance right before making the API call to ensure it uses the latest key.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       let operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
@@ -95,7 +94,6 @@ const VideoDemoModal: React.FC<VideoDemoModalProps> = ({ isOpen, onClose }) => {
     } catch (error: any) {
       console.error("Video Generation Error:", error);
       if (error.message?.includes("Requested entity was not found")) {
-        // If request fails with project-not-found, prompt for key selection again.
         setStatus('AUTH_REQUIRED');
       } else {
         setStatus('ERROR');

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 import { db } from '../services/db';
 
 interface Message {
@@ -16,7 +16,7 @@ const Chatbot: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const chatInstanceRef = useRef<any>(null);
+  const chatInstanceRef = useRef<Chat | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -47,16 +47,16 @@ const Chatbot: React.FC = () => {
     - If asked about a vendor not in the list, state that it is not in the current queue.`;
   };
 
-  const initChat = () => {
-    // Directly use process.env.API_KEY for initialization.
+  const initChat = (): Chat => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    chatInstanceRef.current = ai.chats.create({
+    const chat = ai.chats.create({
       model: 'gemini-3-pro-preview',
       config: {
         systemInstruction: getSystemContext(),
       },
     });
-    return chatInstanceRef.current;
+    chatInstanceRef.current = chat;
+    return chat;
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -69,9 +69,8 @@ const Chatbot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const chat = initChat();
+      const chat = chatInstanceRef.current || initChat();
       const response = await chat.sendMessage({ message: userMessage });
-      // Use .text property directly.
       const modelText = response.text || "I'm sorry, I couldn't process that request.";
       setMessages(prev => [...prev, { role: 'model', text: modelText }]);
     } catch (error) {

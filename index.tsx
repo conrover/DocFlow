@@ -5,7 +5,8 @@ import App from './App';
 
 declare global {
   /**
-   * Defines the AIStudio interface globally to match the environment's expected type.
+   * Internal AI Studio interface for API key management.
+   * Fix: Declaring this as an interface allows it to merge with any existing global definitions.
    */
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
@@ -14,14 +15,17 @@ declare global {
 
   interface Window {
     /**
-     * Declares the aistudio property using the AIStudio interface to ensure 
-     * compatibility with existing global definitions and modifiers.
+     * Internal AI Studio interface for API key management.
+     * Inlined to prevent TS2304 resolution errors during build.
      */
+    // Fix: Use the AIStudio interface instead of a literal type to ensure identical modifiers and matching types as required by the environment.
     aistudio: AIStudio;
   }
+
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;
+      VITE_API_KEY?: string;
     }
   }
 }
